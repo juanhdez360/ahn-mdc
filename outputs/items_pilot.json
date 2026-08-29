@@ -1,0 +1,117 @@
+{
+  "seed": 0,
+  "pool_size": 4000,
+  "n_items": 10,
+  "items": [
+    {
+      "item_id": "numerical_0000",
+      "distractor_density": "low",
+      "fact": {
+        "fact_type": "numerical",
+        "text": "Person_0's employee ID is 100000.",
+        "question": "What is Person_0's employee ID?",
+        "answer": "100000"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "temporal_0001",
+      "distractor_density": "low",
+      "fact": {
+        "fact_type": "temporal",
+        "text": "Person_1 arrived before Person_2.",
+        "question": "Who arrived first, Person_1 or Person_2?",
+        "answer": "Person_1"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "entity-attribute_0002",
+      "distractor_density": "low",
+      "fact": {
+        "fact_type": "entity-attribute",
+        "text": "Person_2's favorite color is red.",
+        "question": "What is Person_2's favorite color?",
+        "answer": "red"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "multi-hop_0003",
+      "distractor_density": "low",
+      "fact": {
+        "fact_type": "multi-hop",
+        "text": "Person_3 manages Person_4. Person_4 works for Meta.",
+        "question": "Which company does Person_3's subordinate work for?",
+        "answer": "Meta"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "contradictory_0004",
+      "distractor_density": "low",
+      "fact": {
+        "fact_type": "contradictory",
+        "text": "Person_4 lived in Sydney. Person_4 now lives in Dubai.",
+        "question": "Where does Person_4 live now?",
+        "answer": "Dubai"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "numerical_0005",
+      "distractor_density": "high",
+      "fact": {
+        "fact_type": "numerical",
+        "text": "Person_5's employee ID is 100685.",
+        "question": "What is Person_5's employee ID?",
+        "answer": "100685"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "temporal_0006",
+      "distractor_density": "high",
+      "fact": {
+        "fact_type": "temporal",
+        "text": "Person_6 arrived before Person_7.",
+        "question": "Who arrived first, Person_6 or Person_7?",
+        "answer": "Person_6"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "entity-attribute_0007",
+      "distractor_density": "high",
+      "fact": {
+        "fact_type": "entity-attribute",
+        "text": "Person_7's favorite color is red.",
+        "question": "What is Person_7's favorite color?",
+        "answer": "red"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "multi-hop_0008",
+      "distractor_density": "high",
+      "fact": {
+        "fact_type": "multi-hop",
+        "text": "Person_8 manages Person_9. Person_9 works for Meta.",
+        "question": "Which company does Person_8's subordinate work for?",
+        "answer": "Meta"
+      },
+      "n_distractors": 4000
+    },
+    {
+      "item_id": "contradictory_0009",
+      "distractor_density": "high",
+      "fact": {
+        "fact_type": "contradictory",
+        "text": "Person_9 lived in Sydney. Person_9 now lives in Dubai.",
+        "question": "Where does Person_9 live now?",
+        "answer": "Dubai"
+      },
+      "n_distractors": 4000
+    }
+  ]
+}

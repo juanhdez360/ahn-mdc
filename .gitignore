@@ -1,0 +1,21 @@
+.venv/
+.uv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.env
+.env.*
+*.egg-info/
+dist/
+build/
+8_outputs/results/*
+!8_outputs/results/.gitkeep
+8_outputs/graphs/*
+!8_outputs/graphs/.gitkeep
+# Pilot CSVs carry no provenance banner; only committed tables are the .md ones.
+8_outputs/tables/*_pilot.csv
+merged_ckpt/
+vendor/
+uv.*
+uv.lock

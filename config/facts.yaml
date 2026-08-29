@@ -1,0 +1,63 @@
+# Fact-type taxonomy — frozen before the full run (research doc, Table 2).
+#
+# H1 predicts these degrade at different rates. Adding or removing a category after
+# the run starts turns a preregistered test into a fishing expedition.
+
+version: 1
+status: FROZEN
+
+types:
+  numerical:
+    example: "Person_0's employee ID is 100000."
+    importance: high
+    answer_form: exact_string      # digits; matcher must not accept a near miss
+    h1_prediction: fast degradation — no semantic redundancy to reconstruct from
+
+  temporal:
+    example: "Person_0 arrived before Person_1."
+    importance: medium
+    answer_form: entity
+    h1_prediction: slower — binary orderings are guessable at 50% by chance
+    caveat: >-
+      Two-way question, so chance is 0.5. Correct for it before comparing this
+      category against the others, or it will look artificially robust. The pilot
+      shows 90-100% here under pressures where every other type collapses.
+
+  entity-attribute:
+    example: "Person_0's favorite color is blue."
+    importance: medium
+    answer_form: closed_set        # 5 colours -> 20% chance
+    h1_prediction: fast degradation, but chance-corrected
+
+  multi-hop:
+    example: "Person_0 manages Person_1. Person_1 works for Google."
+    query: which company does Person_0's subordinate work for?
+    importance: high
+    answer_form: closed_set        # 5 companies
+    h1_prediction: fastest — requires two facts to survive compression, not one
+
+  contradictory:
+    example: "Person_0 lived in Paris. Person_0 now lives in London."
+    importance: high
+    answer_form: closed_set
+    h1_prediction: the update should survive; the stale value is the failure mode
+    caveat: >-
+      The pilot scores this at 0% under every condition, including in-window,
+      where every other type scores 100%. That pattern is a scoring bug, not
+      degradation — the matcher is likely accepting the first location or
+      rejecting a correct answer. See open_decisions.md #7.
+
+# Chance accuracy per category, for chance-correcting H1 comparisons. Categories
+# with different chance floors are not directly comparable on raw accuracy.
+chance:
+  numerical: 0.0
+  temporal: 0.5
+  entity-attribute: 0.2
+  multi-hop: 0.2
+  contradictory: 0.2
+
+# Distractors must never contain the target's answer, or a "correct" response can
+# be produced without retrieving anything. Enforced by dataset.assert_no_collision.
+collision_control:
+  enabled: true
+  check: target answer string must not appear in any distractor text

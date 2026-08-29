@@ -1,0 +1,174 @@
+# AHN memory-degradation experiment — single source of truth.
+# Every number the analysis uses lives here. Nothing is hardcoded in src/.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+# Checkpoints from https://github.com/ByteDance-Seed/AHN (Model Zoo).
+# Paper: Fang et al., arXiv:2510.07318.
+models:
+  base: Qwen/Qwen2.5-3B-Instruct   # 3B fits a Colab GPU; 7B/14B exist if we scale
+
+  # Held identical across arms and asserted at load time. Architecture is the only
+  # intended difference.
+  matched:
+    torch_dtype: float16
+    device_map: auto
+    trust_remote_code: true
+    attn_implementation: sdpa
+    ahn_position: prefix
+    sliding_window_type: fixed
+    generation:
+      do_sample: false             # greedy: confidence must be comparable across arms
+      max_new_tokens: 12
+      num_beams: 1
+
+  # The AHN paper trains with --sliding_window 256, but a merged checkpoint loads
+  # through a stock Qwen2ForCausalLM that carries Qwen2.5's own (much larger)
+  # window. Forcing it here is what makes the target actually leave exact memory.
+  # See protocol/open_decisions.md #1 — this is the P0 blocker.
+  sliding_window:
+    force: 256
+    verify_on_checkpoint: true     # print what the checkpoint reports before overriding
+
+  arms:
+    mamba2:
+      label: AHN-Mamba2
+      ahn_implementation: Mamba2
+      checkpoint: ByteDance-Seed/AHN-Mamba2-for-Qwen-2.5-Instruct-3B
+      ahn_params: 11_900_000
+      extra_install: 'MAMBA_FORCE_BUILD=TRUE pip install "git+https://github.com/yuweihao/mamba.git"'
+    deltanet:
+      label: AHN-DeltaNet
+      ahn_implementation: DeltaNet
+      checkpoint: ByteDance-Seed/AHN-DN-for-Qwen-2.5-Instruct-3B
+      ahn_params: 11_800_000
+      extra_install: null
+    gated_deltanet:
+      label: AHN-GatedDeltaNet
+      ahn_implementation: GatedDeltaNet
+      checkpoint: ByteDance-Seed/AHN-GDN-for-Qwen-2.5-Instruct-3B
+      ahn_params: 13_000_000
+      extra_install: null
+    transformer:
+      label: Qwen2.5-3B (no AHN)
+      ahn_implementation: null     # reference arm: no compressed memory at all
+      checkpoint: null
+      ahn_params: 0
+      extra_install: null
+
+  # Known confound — disclose, do not hide. AHN module sizes span 10%, and
+  # GatedDeltaNet is the largest, so part of any GDN win is capacity.
+  confounds:
+    - AHN parameter counts differ (11.8M / 11.9M / 13.0M); report them beside the results.
+    - All three modules were self-distilled by the AHN authors; we inherit their recipe.
+
+# ---------------------------------------------------------------------------
+# Compression pressure
+# ---------------------------------------------------------------------------
+pressure:
+  variable: tokens_after_target
+  unit: model_tokens               # not words, not facts
+  interpretation: >-
+    A proxy for compression pressure, not a direct measurement of how much is stored
+    in the recurrent state. State the proxy status explicitly in the paper.
+
+  # Grid as multiples of the sliding window, resolved at runtime. Log-spaced because
+  # degradation is expected to be log-linear, with resolution near the window edge.
+  grid: [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
+  pilot_grid: [0.0, 0.5, 1.0, 2.0]
+  max_context_tokens: 24576        # AHN training cutoff_len
+  include_threshold: true          # add T as its own grid point
+
+  # Mechanical, from the checkpoint. Not a choice.
+  conditions:
+    exact_memory: tokens_after_target < sliding_window
+    recurrent_memory: tokens_after_target >= sliding_window
+
+# ---------------------------------------------------------------------------
+# H2 threshold T — blocked on a citation
+# ---------------------------------------------------------------------------
+threshold:
+  status: VERIFIED     # LOCKED unblocks the H2 numbers
+  facts: 50
+  tokens: null                     # derived from facts x tokens_per_fact
+  source: null
+  decision_record: protocol/h2_threshold.md
+  min_windows: 1.5                 # T must clear the window or nothing is compressed
+
+  tokens_per_fact:
+    estimate: 16
+    # Median over the 500-row pilot, differencing each item's context length against
+    # its own zero-pressure probe. Stable across levels: 15.04 / 15.32 / 15.41 / 16.31.
+    measured: 15.37
+
+# ---------------------------------------------------------------------------
+# Design
+# ---------------------------------------------------------------------------
+design:
+  # Same items, same prompts, replayed across every arm and pressure level.
+  matching_key: [item_id, tokens_after_target, seed]
+  state_reset: per_trajectory      # independent forward pass; probes must not contaminate
+  require_complete_grid: true
+
+  factors:
+    fact_type: from_facts_yaml
+    distractor_density: [low, high]
+    target_position: [early, mid, late]
+
+run_modes:
+  pilot:
+    purpose: pipeline verification only — never cited as a result
+    n_items: 10                  # mentor: 100-150 samples / 10% of data
+    seeds: [0]
+    grid: pilot_grid
+    hardware: gpu                  # Colab T4/L4 or local CUDA; not A40 (2-day cap)
+    suffix: _pilot
+  full:
+    n_items: 500                   # sufficient for interpreting ECE
+    seeds: [0, 1, 2, 3, 4]
+    grid: grid
+    hardware: a40
+    suffix: ""
+
+# ---------------------------------------------------------------------------
+# Statistics
+# ---------------------------------------------------------------------------
+statistics:
+  # Items recur across arms and pressures, so trials are clustered. Resampling
+  # trials would report intervals that are far too tight.
+  bootstrap: cluster
+  cluster_on: seed
+  n_resamples: 2000
+  ci: 0.95
+  paired: true                     # same items across arms
+  multiple_comparisons: holm
+  min_cell_size: 30
+
+calibration:
+  ece_bins: 10
+  ece_binning: equal_width         # Guo et al. 2017 (ICML)
+  cwr_threshold: 0.5               # PROVISIONAL — see open_decisions.md #5
+  confidence: sequence_probability # PROVISIONAL — see open_decisions.md #6
+
+# ---------------------------------------------------------------------------
+# Acceptance gates — nothing leaves the repo until these pass
+# ---------------------------------------------------------------------------
+acceptance:
+  exact_memory_accuracy:
+    defensible: [0.70, 0.80]
+    acceptable_max: 0.85
+    red_flag_at: 0.90              # task already solved by existing models
+  require_threshold_locked: true
+  require_threshold_clears_window: true
+  require_matched_design: true
+
+outputs:
+  raw: outputs/results{suffix}.parquet
+  items: outputs/items{suffix}.json
+  tables: outputs/tables
+  figures: outputs/figures
+  # NAACL industry track: 6 pages, 10 exhibits (6 tables + 4 graphs).
+  venue_budget: {tables: 6, graphs: 4}
