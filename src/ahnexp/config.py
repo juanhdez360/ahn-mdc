@@ -22,16 +22,15 @@ def project_root(start: Path | None = None) -> Path:
     """Walk up until the repo root is found.
 
     Notebooks live in a subdirectory and also run on Colab, so no call site can rely
-    on the working directory.
+    on the working directory. Colab sessions typically start at ``/content``, which
+    has neither ``pyproject.toml`` nor a parent that does — if no markers are found,
+    use the starting directory (the same fallback as ``Path.cwd()``).
     """
     here = (start or Path.cwd()).resolve()
     for candidate in (here, *here.parents):
         if all((candidate / marker).exists() for marker in _ROOT_MARKERS):
             return candidate
-    raise FileNotFoundError(
-        f"Could not locate the repo root above {here}. "
-        "Expected a directory containing pyproject.toml and config/."
-    )
+    return here
 
 
 def bootstrap(start: Path | None = None) -> Path:
