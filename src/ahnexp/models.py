@@ -204,19 +204,58 @@ def load(name: str, ahn_repo: str | Path | None = None, sliding_window: int | No
     return model, tokenizer
 
 
+_STALE_DYNAMIC_FIELDS = ("dy_sliding_window", "dy_num_attn_sinks")
+
+
+def _drop_attr(obj, name: str) -> None:
+    if not hasattr(obj, name):
+        return
+    try:
+        delattr(obj, name)
+    except (AttributeError, TypeError):
+        setattr(obj, name, None)
+
+
 def _force_window(model, window: int, verbose: bool = True) -> None:
-    reported = getattr(model.config, "sliding_window", None)
+    """Normalize every arm to the matched inference config.
+
+    Window length is the P0 fix. The rest (`fixed` / `prefix` / zero sinks) is
+    already declared in `models.matched` — apply it here so a leftover dynamic
+    window or attention-sink count cannot keep the target in exact KV.
+    """
+    matched = config.experiment()["models"]["matched"]
+    window_type = matched["sliding_window_type"]
+    ahn_position = matched["ahn_position"]
+    sinks = int(matched["num_attn_sinks"])
+    cfg = model.config
     if verbose:
         print(
-            f"checkpoint reports sliding_window={reported}, "
-            f"use_sliding_window={getattr(model.config, 'use_sliding_window', None)}"
-            f" -> forcing {window}"
+            f"checkpoint reports sliding_window={getattr(cfg, 'sliding_window', None)}, "
+            f"use_sliding_window={getattr(cfg, 'use_sliding_window', None)}, "
+            f"sliding_window_type={getattr(cfg, 'sliding_window_type', None)}, "
+            f"ahn_position={getattr(cfg, 'ahn_position', None)}, "
+            f"num_attn_sinks={getattr(cfg, 'num_attn_sinks', None)}"
+            f" -> forcing {window} / {window_type} / {ahn_position} / sinks={sinks}"
         )
-    model.config.sliding_window = int(window)
-    model.config.use_sliding_window = True
+    cfg.sliding_window = int(window)
+    cfg.use_sliding_window = True
+    cfg.sliding_window_type = window_type
+    cfg.ahn_position = ahn_position
+    cfg.num_attn_sinks = sinks
+    for stale in _STALE_DYNAMIC_FIELDS:
+        _drop_attr(cfg, stale)
+
     for module in model.modules():
         if hasattr(module, "sliding_window"):
             module.sliding_window = int(window)
+        if hasattr(module, "sliding_window_type"):
+            module.sliding_window_type = window_type
+        if hasattr(module, "ahn_position"):
+            module.ahn_position = ahn_position
+        if hasattr(module, "num_attn_sinks"):
+            module.num_attn_sinks = sinks
+        for stale in _STALE_DYNAMIC_FIELDS:
+            _drop_attr(module, stale)
 
 
 def effective_window(model) -> int:
@@ -234,6 +273,9 @@ def describe(name: str, model, tokenizer) -> dict[str, Any]:
     return {
         "arm": name,
         "sliding_window": effective_window(model),
+        "sliding_window_type": getattr(model.config, "sliding_window_type", None),
+        "ahn_position": getattr(model.config, "ahn_position", None),
+        "num_attn_sinks": getattr(model.config, "num_attn_sinks", None),
         "dtype": str(next(model.parameters()).dtype),
         "vocab_size": int(model.config.vocab_size),
         "tokenizer_hash": _tokenizer_fingerprint(tokenizer),

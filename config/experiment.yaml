@@ -20,6 +20,7 @@ models:
     attn_implementation: sdpa
     ahn_position: prefix
     sliding_window_type: fixed
+    num_attn_sinks: 0              # sinks would pin early targets in exact KV forever
     generation:
       do_sample: false             # greedy: confidence must be comparable across arms
       max_new_tokens: 12
